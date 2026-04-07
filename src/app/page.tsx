@@ -1,5 +1,6 @@
-import { redirect } from "next/navigation";
+import { QuotesWorkspace } from "@/modules/commercial/quotes/workspace";
+import { getSeedQuotes } from "@/modules/commercial/quotes/repository";
 
 export default function Home() {
-  redirect("/comercial/presupuestos");
+  return <QuotesWorkspace initialQuotes={getSeedQuotes()} />;
 }
