@@ -4,9 +4,9 @@
 
 Este proyecto busca construir un ERP B2B para una Pyme argentina que vende tecnologia a otras empresas. La meta no es solamente tener pantallas, sino un sistema unico que conecte comercial, compras, stock, logistica, administracion, servicio tecnico, finanzas, impuestos y contabilidad.
 
-El proyecto ya tiene una primera base funcional publicada en Netlify. El modulo inicial es `Comercial / Presupuestos`, porque es el punto donde nace la operacion y desde donde luego se encadenan ventas, compras, stock, facturacion y cobranzas.
+El proyecto ya tiene una base funcional publicada en Netlify. El punto de partida fue `Comercial / Presupuestos`, porque es donde nace la operacion. Sobre esa base ya conviven tambien `Maestros / Clientes` y `Ventas / Ordenes de venta`, para empezar a unir relacion comercial y ejecucion operativa.
 
-La version actual fue adaptada para deploy estatico y hoy funciona como demo operativa real: permite cargar presupuestos desde la web, validar datos, mostrar pipeline y guardar informacion en el navegador local. La siguiente etapa es pasar esa base a persistencia real con PostgreSQL y empezar a construir los maestros y la conversion a orden de venta.
+La version actual fue adaptada para deploy estatico y hoy funciona como una base operativa real: permite cargar clientes, presupuestos y ordenes desde la web, validar datos, mostrar metricas y persistir en Supabase desde navegador. La siguiente etapa es profundizar el flujo con productos, stock, entregas y facturacion.
 
 ---
 
@@ -27,32 +27,35 @@ Objetivos principales:
 
 ## 3. Estado actual del proyecto
 
-Estado al 2026-04-07:
+Estado al 2026-04-09:
 
 - repositorio GitHub: `tsanjuan1/tech`
 - hosting: Netlify
 - sitio publicado: `https://jovial-babka-6134d6.netlify.app`
 - rutas funcionales actuales:
-  - `https://jovial-babka-6134d6.netlify.app/comercial/presupuestos/`
-  - `https://jovial-babka-6134d6.netlify.app/maestros/clientes/`
+  - `https://jovial-babka-6134d6.netlify.app/comercial/presupuestos/?module=quotes`
+  - `https://jovial-babka-6134d6.netlify.app/comercial/presupuestos/?module=customers`
+  - `https://jovial-babka-6134d6.netlify.app/comercial/presupuestos/?module=orders`
 - stack actual: `Next.js 16 + React 19 + TypeScript`
 - modalidad actual de despliegue: sitio estatico exportado
 
 Estado funcional actual:
 
-- existe un modulo inicial de presupuestos
-- existe un segundo modulo funcional de maestros de clientes
-- la pantalla principal y la ruta `/comercial/presupuestos/` muestran el workspace comercial
-- la ruta `/maestros/clientes/` muestra el maestro inicial de clientes
-- la carga de presupuestos funciona del lado cliente
-- la carga de clientes funciona del lado cliente
+- existe un modulo funcional de presupuestos
+- existe un modulo funcional de maestros de clientes
+- existe un modulo funcional de ordenes de venta
+- la pantalla principal y la ruta `/comercial/presupuestos/` muestran el workspace comercial con navegacion interna por modulo
+- la carga de presupuestos funciona con Supabase
+- la carga de clientes funciona con Supabase
+- la carga de ordenes de venta funciona con Supabase
 - los datos se validan antes de guardarse
-- los datos se guardan en `localStorage` por modulo
-- existen presupuestos semilla para la demo inicial
-- existen clientes semilla para la demo inicial
+- existen presupuestos semilla para fallback visual
+- existen clientes semilla para fallback visual
+- existen ordenes semilla para fallback visual
 - se muestran metricas comerciales basicas
 - se muestran metricas base del maestro de clientes
-- no hay backend productivo ni base de datos todavia
+- se muestran metricas operativas de ordenes de venta
+- existe persistencia real en Supabase
 - no hay autenticacion ni permisos por rol todavia
 
 Motivo del enfoque actual:

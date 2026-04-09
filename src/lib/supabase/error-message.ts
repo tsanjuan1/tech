@@ -9,7 +9,9 @@ type SupabaseOperation =
   | "customers-read"
   | "customers-write"
   | "quotes-read"
-  | "quotes-write";
+  | "quotes-write"
+  | "sales-orders-read"
+  | "sales-orders-write";
 
 function getSupabaseErrorShape(error: unknown): SupabaseErrorShape {
   if (!error || typeof error !== "object") {
@@ -40,6 +42,13 @@ export function getSupabaseActionMessage(
     message.includes("does not exist");
 
   if (isPermissionError) {
+    if (
+      operation === "sales-orders-read" ||
+      operation === "sales-orders-write"
+    ) {
+      return "Supabase esta respondiendo, pero el modulo de ordenes todavia no tiene permisos o estructura lista para la web publica. Ejecuta 0003_sales_orders_module.sql en Supabase y luego toca Reintentar conexion.";
+    }
+
     if (operation === "customers-read" || operation === "quotes-read") {
       return "Supabase esta respondiendo, pero la web publica no tiene permisos sobre las tablas. Ejecuta el parche 0002_enable_anon_browser_access.sql en Supabase y luego toca Reintentar conexion.";
     }
@@ -48,6 +57,13 @@ export function getSupabaseActionMessage(
   }
 
   if (isMissingRelation) {
+    if (
+      operation === "sales-orders-read" ||
+      operation === "sales-orders-write"
+    ) {
+      return "El modulo de ordenes de venta todavia no existe en tu base. Corre 0003_sales_orders_module.sql en Supabase y luego toca Reintentar conexion.";
+    }
+
     if (operation === "customers-read" || operation === "quotes-read") {
       return "La estructura de Supabase todavia no esta completa. Verifica que hayas corrido 0001_initial_schema.sql y luego Reintentar conexion.";
     }
@@ -65,6 +81,14 @@ export function getSupabaseActionMessage(
 
   if (operation === "quotes-read") {
     return "No se pudo leer Supabase para presupuestos. Revisa la conexion del proyecto y vuelve a intentar.";
+  }
+
+  if (operation === "sales-orders-read") {
+    return "No se pudo leer Supabase para ordenes de venta. Revisa la conexion del proyecto y vuelve a intentar.";
+  }
+
+  if (operation === "sales-orders-write") {
+    return "No se pudo guardar la orden de venta en Supabase. Revisa permisos, esquema y conexion del proyecto.";
   }
 
   return "No se pudo guardar el presupuesto en Supabase. Revisa permisos, esquema y conexion del proyecto.";

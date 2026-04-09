@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import { ModuleNav } from "@/components/module-nav";
 import styles from "@/components/module-shell.module.css";
 import { SubmitButton } from "@/components/submit-button";
@@ -10,43 +9,46 @@ import {
   isSupabaseConfigured,
 } from "@/lib/supabase/client";
 import { getSupabaseActionMessage } from "@/lib/supabase/error-message";
-import {
-  createSupabaseQuote,
-  getQuotesDashboard,
-  listSupabaseQuotes,
-} from "@/modules/commercial/quotes/repository";
 import type {
   CurrencyCode,
   Quote,
-  QuoteFieldName,
-  QuoteStatus,
 } from "@/modules/commercial/quotes/types";
+import { solutionTypeLabels } from "@/modules/commercial/quotes/types";
 import {
-  solutionTypeLabels,
-  statusLabels,
-} from "@/modules/commercial/quotes/types";
-import { validateCreateQuoteInput } from "@/modules/commercial/quotes/validation";
-import {
-  getSeedCustomers,
   listSupabaseCustomers,
 } from "@/modules/masters/customers/repository";
-import { CustomersWorkspace } from "@/modules/masters/customers/workspace";
-import { getSeedSalesOrders } from "@/modules/sales/orders/repository";
-import { SalesOrdersWorkspace } from "@/modules/sales/orders/workspace";
+import type { Customer } from "@/modules/masters/customers/types";
+import {
+  createSupabaseSalesOrder,
+  getSalesOrdersDashboard,
+  listSupabaseSalesOrders,
+} from "@/modules/sales/orders/repository";
+import type {
+  SalesOrder,
+  SalesOrderFieldName,
+  SalesOrderStatus,
+} from "@/modules/sales/orders/types";
+import { salesOrderStatusLabels } from "@/modules/sales/orders/types";
+import { validateCreateSalesOrderInput } from "@/modules/sales/orders/validation";
+import { listSupabaseQuotes } from "@/modules/commercial/quotes/repository";
 
-type QuotesWorkspaceProps = {
+type SalesOrdersWorkspaceProps = {
+  initialOrders: SalesOrder[];
+  initialCustomers: Customer[];
   initialQuotes: Quote[];
 };
 
 type FormState = {
+  quoteId: string;
   customerId: string;
   customerName: string;
   customerTaxId: string;
   solutionType: string;
   sellerName: string;
+  status: string;
   currency: string;
   totalAmount: string;
-  validUntil: string;
+  requestedDeliveryDate: string;
   notes: string;
 };
 
@@ -58,23 +60,26 @@ type FeedbackState =
   | null;
 
 const defaultFormState: FormState = {
+  quoteId: "",
   customerId: "",
   customerName: "",
   customerTaxId: "",
   solutionType: "",
   sellerName: "",
+  status: "entered",
   currency: "USD",
   totalAmount: "",
-  validUntil: "",
+  requestedDeliveryDate: "",
   notes: "",
 };
 
-const statusClassNames: Record<QuoteStatus, string> = {
-  draft: styles.statusDraft,
-  sent: styles.statusSent,
-  approved: styles.statusApproved,
-  rejected: styles.statusRejected,
-  expired: styles.statusExpired,
+const orderStatusClassNames: Record<SalesOrderStatus, string> = {
+  entered: styles.statusDraft,
+  "credit-check": styles.statusSent,
+  "ready-fulfillment": styles.statusApproved,
+  "partial-delivery": styles.statusSent,
+  delivered: styles.statusApproved,
+  "on-hold": styles.statusRejected,
 };
 
 const currencyLabels: Record<CurrencyCode, string> = {
@@ -117,26 +122,33 @@ function getDaysUntil(value: string) {
 
 function normalizeFormState(formState: FormState) {
   return {
+    quoteId: formState.quoteId,
     customerId: formState.customerId,
     customerName: formState.customerName,
     customerTaxId: formState.customerTaxId,
     solutionType: formState.solutionType,
     sellerName: formState.sellerName,
+    status: formState.status,
     currency: formState.currency,
     totalAmount: formState.totalAmount,
-    validUntil: formState.validUntil,
+    requestedDeliveryDate: formState.requestedDeliveryDate,
     notes: formState.notes,
   };
 }
 
-export function QuotesWorkspace({ initialQuotes }: QuotesWorkspaceProps) {
+export function SalesOrdersWorkspace({
+  initialOrders,
+  initialCustomers,
+  initialQuotes,
+}: SalesOrdersWorkspaceProps) {
+  const [salesOrders, setSalesOrders] = useState(initialOrders);
+  const [customers, setCustomers] = useState(initialCustomers);
   const [quotes, setQuotes] = useState(initialQuotes);
-  const [customers, setCustomers] = useState(getSeedCustomers());
   const [formState, setFormState] = useState<FormState>(defaultFormState);
   const [feedback, setFeedback] = useState<FeedbackState>(null);
   const [connectionNotice, setConnectionNotice] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<
-    Partial<Record<QuoteFieldName, string>>
+    Partial<Record<SalesOrderFieldName, string>>
   >({});
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -158,19 +170,21 @@ export function QuotesWorkspace({ initialQuotes }: QuotesWorkspaceProps) {
 
     try {
       const supabase = getSupabaseBrowserClient();
-      const [nextQuotes, nextCustomers] = await Promise.all([
-        listSupabaseQuotes(supabase),
+      const [nextOrders, nextCustomers, nextQuotes] = await Promise.all([
+        listSupabaseSalesOrders(supabase),
         listSupabaseCustomers(supabase),
+        listSupabaseQuotes(supabase),
       ]);
 
       if (isMountedRef.current) {
-        setQuotes(nextQuotes);
+        setSalesOrders(nextOrders);
         setCustomers(nextCustomers);
+        setQuotes(nextQuotes);
         setConnectionNotice(null);
       }
     } catch (error) {
       if (isMountedRef.current) {
-        setConnectionNotice(getSupabaseActionMessage(error, "quotes-read"));
+        setConnectionNotice(getSupabaseActionMessage(error, "sales-orders-read"));
       }
     } finally {
       if (isMountedRef.current) {
@@ -189,22 +203,33 @@ export function QuotesWorkspace({ initialQuotes }: QuotesWorkspaceProps) {
     };
   }, []);
 
-  const dashboard = useMemo(() => getQuotesDashboard(quotes), [quotes]);
+  const dashboard = useMemo(
+    () => getSalesOrdersDashboard(salesOrders),
+    [salesOrders],
+  );
   const selectedCustomer = useMemo(
     () => customers.find((customer) => customer.id === formState.customerId) ?? null,
     [customers, formState.customerId],
   );
+  const eligibleQuotes = useMemo(
+    () =>
+      quotes.filter(
+        (quote) => quote.status === "approved" || quote.status === "sent",
+      ),
+    [quotes],
+  );
+  const selectedQuote = useMemo(
+    () => eligibleQuotes.find((quote) => quote.id === formState.quoteId) ?? null,
+    [eligibleQuotes, formState.quoteId],
+  );
 
-  function handleFieldChange(
-    field: keyof FormState,
-    value: string,
-  ) {
+  function handleFieldChange(field: keyof FormState, value: string) {
     setFormState((current) => ({
       ...current,
       [field]: value,
     }));
 
-    const errorField = field as QuoteFieldName;
+    const errorField = field as SalesOrderFieldName;
     if (fieldErrors[errorField]) {
       setFieldErrors((current) => ({
         ...current,
@@ -214,7 +239,7 @@ export function QuotesWorkspace({ initialQuotes }: QuotesWorkspaceProps) {
   }
 
   function handleCustomerChange(customerId: string) {
-    const customer = customers.find((entry) => entry.id === customerId);
+    const customer = customers.find((entry) => entry.id === customerId) ?? null;
 
     setFormState((current) => ({
       ...current,
@@ -232,10 +257,43 @@ export function QuotesWorkspace({ initialQuotes }: QuotesWorkspaceProps) {
     }));
   }
 
+  function handleQuoteChange(quoteId: string) {
+    const quote = eligibleQuotes.find((entry) => entry.id === quoteId) ?? null;
+
+    if (!quote) {
+      setFormState((current) => ({
+        ...current,
+        quoteId: "",
+      }));
+      return;
+    }
+
+    setFormState((current) => ({
+      ...current,
+      quoteId,
+      customerId: quote.customerId ?? current.customerId,
+      customerName: quote.customerName,
+      customerTaxId: quote.customerTaxId,
+      sellerName: quote.sellerName,
+      solutionType: quote.solutionType,
+      currency: quote.currency,
+      totalAmount: String(quote.totalAmount),
+      notes: quote.notes,
+    }));
+
+    setFieldErrors((current) => ({
+      ...current,
+      quoteId: undefined,
+      customerId: undefined,
+      customerName: undefined,
+      customerTaxId: undefined,
+    }));
+  }
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const validation = validateCreateQuoteInput(normalizeFormState(formState));
+    const validation = validateCreateSalesOrderInput(normalizeFormState(formState));
 
     if (!validation.success) {
       setFieldErrors(validation.fieldErrors);
@@ -249,22 +307,22 @@ export function QuotesWorkspace({ initialQuotes }: QuotesWorkspaceProps) {
     setIsSaving(true);
 
     try {
-      const nextQuote = await createSupabaseQuote(
+      const nextSalesOrder = await createSupabaseSalesOrder(
         getSupabaseBrowserClient(),
         validation.data,
       );
 
-      setQuotes((current) => [nextQuote, ...current]);
+      setSalesOrders((current) => [nextSalesOrder, ...current]);
       setFormState(defaultFormState);
       setFieldErrors({});
       setFeedback({
         type: "success",
-        message: `Presupuesto ${nextQuote.number} creado correctamente para ${nextQuote.customerName}.`,
+        message: `Orden ${nextSalesOrder.number} creada correctamente para ${nextSalesOrder.customerName}.`,
       });
     } catch (error) {
       setFeedback({
         type: "error",
-        message: getSupabaseActionMessage(error, "quotes-write"),
+        message: getSupabaseActionMessage(error, "sales-orders-write"),
       });
     } finally {
       setIsSaving(false);
@@ -283,52 +341,54 @@ export function QuotesWorkspace({ initialQuotes }: QuotesWorkspaceProps) {
 
       <section className={styles.hero}>
         <article className={styles.heroPanel}>
-          <span className={styles.eyebrow}>Modulo 01 / Comercial</span>
-          <h1 className={styles.heroTitle}>Presupuestos que ordenan toda la operacion</h1>
+          <span className={styles.eyebrow}>Modulo 03 / Ventas</span>
+          <h1 className={styles.heroTitle}>Ordenes de venta que activan la operacion</h1>
           <p className={styles.heroText}>
-            Esta primera version ya queda deployable en Netlify sin runtime
-            server. La carga de presupuestos funciona sobre Supabase y convive
-            con el maestro de clientes para empezar a darle forma real al ERP.
+            Este modulo convierte el cierre comercial en una orden ejecutable.
+            Desde aca quedan definidos cliente, presupuesto origen, estado
+            operativo, fecha comprometida y monto listo para pasar a stock,
+            logistica y administracion.
           </p>
 
           <div className={styles.heroCallouts}>
             <div className={styles.callout}>
-              <span className={styles.calloutLabel}>Enfoque inicial</span>
-              <strong className={styles.calloutValue}>Ventas B2B de tecnologia</strong>
+              <span className={styles.calloutLabel}>Origen</span>
+              <strong className={styles.calloutValue}>Presupuesto o carga manual</strong>
             </div>
             <div className={styles.callout}>
               <span className={styles.calloutLabel}>Persistencia actual</span>
               <strong className={styles.calloutValue}>Supabase en tiempo real</strong>
             </div>
             <div className={styles.callout}>
-              <span className={styles.calloutLabel}>Conexion activa</span>
-              <strong className={styles.calloutValue}>Cliente maestro vinculado</strong>
+              <span className={styles.calloutLabel}>Siguiente hito</span>
+              <strong className={styles.calloutValue}>Stock y entregas</strong>
             </div>
           </div>
         </article>
 
         <aside className={styles.sidebarPanel}>
           <div>
-            <h2 className={styles.sidebarTitle}>Web lista para mostrar</h2>
+            <h2 className={styles.sidebarTitle}>Que resuelve ahora</h2>
             <p className={styles.sidebarText}>
-              Esta version queda publica, conectada a Supabase y con el flujo
-              comercial listo para seguir creciendo sin depender de datos
-              guardados solo en el navegador.
+              La orden de venta deja de ser una charla informal y pasa a tener
+              trazabilidad concreta. Eso permite coordinar preparacion,
+              validacion crediticia, entrega y futura facturacion con una sola
+              referencia operativa.
             </p>
           </div>
 
           <div className={styles.sidebarList}>
             <div className={styles.sidebarItem}>
-              <strong>Frontend</strong>
-              <span>Next.js exportado como sitio estatico para Netlify</span>
+              <strong>Comercial</strong>
+              <span>Convierte presupuestos cerrados en operaciones ejecutables.</span>
             </div>
             <div className={styles.sidebarItem}>
-              <strong>Interaccion</strong>
-              <span>Formulario conectado al maestro y persistido en Supabase</span>
+              <strong>Logistica</strong>
+              <span>Prepara fecha prometida, estado y origen documental.</span>
             </div>
             <div className={styles.sidebarItem}>
-              <strong>Proxima etapa</strong>
-              <span>Productos, items de presupuesto y conversion a venta</span>
+              <strong>Administracion</strong>
+              <span>Base lista para futuras reservas, remitos y facturacion.</span>
             </div>
           </div>
         </aside>
@@ -363,41 +423,36 @@ export function QuotesWorkspace({ initialQuotes }: QuotesWorkspaceProps) {
 
       <section className={styles.metrics}>
         <article className={styles.metricCard}>
-          <span className={styles.metricLabel}>Presupuestos activos</span>
-          <strong className={styles.metricValue}>{dashboard.openQuotesCount}</strong>
+          <span className={styles.metricLabel}>Ordenes abiertas</span>
+          <strong className={styles.metricValue}>{dashboard.openOrdersCount}</strong>
           <p className={styles.metricHint}>
-            Incluye borradores, enviados y aprobados todavia no convertidos a
-            venta.
+            Incluye ordenes ingresadas, listas para preparar, parciales o en espera.
           </p>
         </article>
 
         <article className={styles.metricCard}>
-          <span className={styles.metricLabel}>Vencen en 7 dias</span>
-          <strong className={styles.metricValue}>{dashboard.expiringThisWeekCount}</strong>
+          <span className={styles.metricLabel}>Entregas en 7 dias</span>
+          <strong className={styles.metricValue}>{dashboard.dueThisWeekCount}</strong>
           <p className={styles.metricHint}>
-            Este indicador ayuda a priorizar seguimiento comercial inmediato.
+            Ayuda a anticipar preparacion, coordinacion y seguimiento con el cliente.
           </p>
         </article>
 
         <article className={styles.metricCard}>
-          <span className={styles.metricLabel}>Pipeline USD</span>
+          <span className={styles.metricLabel}>En espera</span>
+          <strong className={styles.metricValue}>{dashboard.onHoldCount}</strong>
+          <p className={styles.metricHint}>
+            Visibilidad para creditos, faltantes o aprobaciones pendientes.
+          </p>
+        </article>
+
+        <article className={styles.metricCard}>
+          <span className={styles.metricLabel}>Comprometido USD</span>
           <strong className={styles.metricValue}>
-            {formatMoney(dashboard.pipelineByCurrency.USD, "USD")}
+            {formatMoney(dashboard.committedByCurrency.USD, "USD")}
           </strong>
           <p className={styles.metricHint}>
-            Separamos moneda para no mezclar gestion comercial con conversiones
-            artificiales.
-          </p>
-        </article>
-
-        <article className={styles.metricCard}>
-          <span className={styles.metricLabel}>Pipeline ARS</span>
-          <strong className={styles.metricValue}>
-            {formatMoney(dashboard.pipelineByCurrency.ARS, "ARS")}
-          </strong>
-          <p className={styles.metricHint}>
-            Valor operativo local listo para futuras reglas de margen e
-            impuestos.
+            Monto abierto comprometido a ejecutar y entregar.
           </p>
         </article>
       </section>
@@ -406,22 +461,45 @@ export function QuotesWorkspace({ initialQuotes }: QuotesWorkspaceProps) {
         <article className={styles.panel}>
           <div className={styles.panelHeader}>
             <div>
-              <h2 className={styles.panelTitle}>Nuevo presupuesto</h2>
+              <h2 className={styles.panelTitle}>Nueva orden de venta</h2>
               <p className={styles.panelText}>
-                El presupuesto ahora nace desde un cliente real del maestro.
-                Eso evita errores de carga, deja la relacion lista para ventas y
-                ordena mejor la base comercial incluso en esta etapa estatica.
+                Puedes cargarla manualmente o derivarla desde un presupuesto
+                enviado o aprobado. La orden toma cliente, responsable, solucion
+                y monto para dejarla lista para operacion.
               </p>
             </div>
-            <span className={styles.stack}>Cliente + Quote link</span>
+            <span className={styles.stack}>Quote to Order</span>
           </div>
 
           <form className={styles.form} onSubmit={handleSubmit}>
             <div className={styles.formGrid}>
               <label className={styles.fieldWide}>
+                <span className={styles.label}>Presupuesto origen</span>
+                <select
+                  className={styles.select}
+                  name="quoteId"
+                  onChange={(event) => handleQuoteChange(event.target.value)}
+                  value={formState.quoteId}
+                >
+                  <option value="">Carga manual / sin presupuesto</option>
+                  {eligibleQuotes.map((quote) => (
+                    <option key={quote.id} value={quote.id}>
+                      {quote.number} - {quote.customerName}
+                    </option>
+                  ))}
+                </select>
+                <span className={styles.secondary}>
+                  {selectedQuote
+                    ? `La orden quedara vinculada a ${selectedQuote.number} y tomara sus datos base.`
+                    : "Si seleccionas un presupuesto, cliente, vendedor y total se completan automaticamente."}
+                </span>
+              </label>
+
+              <label className={styles.fieldWide}>
                 <span className={styles.label}>Cliente maestro</span>
                 <select
                   className={styles.select}
+                  disabled={Boolean(selectedQuote)}
                   name="customerId"
                   onChange={(event) => handleCustomerChange(event.target.value)}
                   required
@@ -444,7 +522,9 @@ export function QuotesWorkspace({ initialQuotes }: QuotesWorkspaceProps) {
                   </span>
                 ) : (
                   <span className={styles.secondary}>
-                    Si el cliente no existe aun, cargalo desde el modulo Maestros / Clientes.
+                    {selectedQuote
+                      ? "El cliente queda bloqueado porque esta orden deriva de un presupuesto existente."
+                      : "Si el cliente no existe aun, cargalo desde Maestros / Clientes."}
                   </span>
                 )}
               </label>
@@ -498,7 +578,7 @@ export function QuotesWorkspace({ initialQuotes }: QuotesWorkspaceProps) {
               </label>
 
               <label className={styles.field}>
-                <span className={styles.label}>Vendedor</span>
+                <span className={styles.label}>Responsable</span>
                 <input
                   className={styles.input}
                   name="sellerName"
@@ -513,8 +593,29 @@ export function QuotesWorkspace({ initialQuotes }: QuotesWorkspaceProps) {
                   <span className={styles.secondary}>{fieldErrors.sellerName}</span>
                 ) : selectedCustomer ? (
                   <span className={styles.secondary}>
-                    Sugerido desde la cuenta: {selectedCustomer.accountManager}
+                    Cuenta asignada a {selectedCustomer.accountManager} con pago a{" "}
+                    {selectedCustomer.paymentTermDays} dias.
                   </span>
+                ) : null}
+              </label>
+
+              <label className={styles.field}>
+                <span className={styles.label}>Estado operativo</span>
+                <select
+                  className={styles.select}
+                  name="status"
+                  onChange={(event) => handleFieldChange("status", event.target.value)}
+                  required
+                  value={formState.status}
+                >
+                  {Object.entries(salesOrderStatusLabels).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+                {fieldErrors.status ? (
+                  <span className={styles.secondary}>{fieldErrors.status}</span>
                 ) : null}
               </label>
 
@@ -537,7 +638,7 @@ export function QuotesWorkspace({ initialQuotes }: QuotesWorkspaceProps) {
               </label>
 
               <label className={styles.field}>
-                <span className={styles.label}>Total</span>
+                <span className={styles.label}>Total comprometido</span>
                 <input
                   className={styles.input}
                   min="0"
@@ -556,28 +657,30 @@ export function QuotesWorkspace({ initialQuotes }: QuotesWorkspaceProps) {
               </label>
 
               <label className={styles.fieldWide}>
-                <span className={styles.label}>Valido hasta</span>
+                <span className={styles.label}>Fecha comprometida</span>
                 <input
                   className={styles.input}
-                  name="validUntil"
+                  name="requestedDeliveryDate"
                   onChange={(event) =>
-                    handleFieldChange("validUntil", event.target.value)}
+                    handleFieldChange("requestedDeliveryDate", event.target.value)}
                   required
                   type="date"
-                  value={formState.validUntil}
+                  value={formState.requestedDeliveryDate}
                 />
-                {fieldErrors.validUntil ? (
-                  <span className={styles.secondary}>{fieldErrors.validUntil}</span>
+                {fieldErrors.requestedDeliveryDate ? (
+                  <span className={styles.secondary}>
+                    {fieldErrors.requestedDeliveryDate}
+                  </span>
                 ) : null}
               </label>
 
               <label className={styles.fieldWide}>
-                <span className={styles.label}>Alcance comercial</span>
+                <span className={styles.label}>Observaciones operativas</span>
                 <textarea
                   className={styles.textarea}
                   name="notes"
                   onChange={(event) => handleFieldChange("notes", event.target.value)}
-                  placeholder="Ejemplo: renovacion de notebooks para 45 usuarios, licencias M365 e instalacion inicial."
+                  placeholder="Ejemplo: coordinar entrega parcial, validar disponible antes de liberar y avisar a administracion para anticipo."
                   value={formState.notes}
                 />
                 {fieldErrors.notes ? (
@@ -587,7 +690,9 @@ export function QuotesWorkspace({ initialQuotes }: QuotesWorkspaceProps) {
             </div>
 
             <div className={styles.hintRow}>
-              <span>El presupuesto guarda un snapshot del cliente y su referencia maestra.</span>
+              <span>
+                La orden guarda el cliente final y opcionalmente la referencia al presupuesto origen.
+              </span>
               <span>
                 {isLoading || isRefreshing
                   ? "Sincronizando datos..."
@@ -595,90 +700,95 @@ export function QuotesWorkspace({ initialQuotes }: QuotesWorkspaceProps) {
               </span>
             </div>
 
-            <SubmitButton pending={isSaving}>Guardar presupuesto</SubmitButton>
+            <SubmitButton pending={isSaving}>Guardar orden de venta</SubmitButton>
           </form>
 
           <p className={styles.note}>
             {connectionNotice
-              ? "El modulo ya esta preparado para Supabase. Cuando corras el SQL en tu proyecto, recarga la pagina y pasara a leer la base real."
-              : "Este modulo ahora usa Supabase. Si acabas de correr el SQL, recarga la pagina para ver los datos iniciales ya persistidos."}
+              ? "El modulo ya esta preparado para Supabase. Cuando corras la migracion de ordenes, recarga o toca Reintentar conexion para empezar a usar la base real."
+              : "Este modulo ya usa Supabase. Si acabas de correr la migracion nueva, recarga la pagina para ver las ordenes base persistidas."}
           </p>
         </article>
 
         <article className={styles.panel}>
           <div className={styles.panelHeader}>
             <div>
-              <h2 className={styles.panelTitle}>Presupuestos recientes</h2>
+              <h2 className={styles.panelTitle}>Ordenes recientes</h2>
               <p className={styles.panelText}>
-                La tabla se actualiza en tiempo real cada vez que agregas un
-                presupuesto desde la misma web.
+                Vista operativa para seguir el estado de ejecucion, detectar bloqueos
+                y dejar trazada la relacion entre venta, cliente y compromiso de entrega.
               </p>
             </div>
-            <span className={styles.stack}>Demo funcional</span>
+            <span className={styles.stack}>Operacion viva</span>
           </div>
 
           <div className={styles.tableWrap}>
-            {quotes.length === 0 ? (
-              <div className={styles.empty}>Todavia no hay presupuestos cargados.</div>
+            {salesOrders.length === 0 ? (
+              <div className={styles.empty}>Todavia no hay ordenes cargadas.</div>
             ) : (
               <table className={styles.table}>
                 <thead>
                   <tr>
-                    <th>Numero</th>
+                    <th>Orden</th>
                     <th>Cliente</th>
-                    <th>Solucion</th>
+                    <th>Origen</th>
                     <th>Responsable</th>
                     <th>Estado</th>
                     <th>Total</th>
-                    <th>Vigencia</th>
+                    <th>Entrega</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {quotes.map((quote) => {
-                    const daysUntil = getDaysUntil(quote.validUntil);
+                  {salesOrders.map((salesOrder) => {
+                    const daysUntil = getDaysUntil(salesOrder.requestedDeliveryDate);
 
                     return (
-                      <tr key={quote.id}>
+                      <tr key={salesOrder.id}>
                         <td>
-                          <span className={styles.number}>{quote.number}</span>
+                          <span className={styles.number}>{salesOrder.number}</span>
                           <span className={styles.secondary}>
-                            Creado {formatDate(quote.createdAt.slice(0, 10))}
+                            Alta {formatDate(salesOrder.createdAt.slice(0, 10))}
                           </span>
                         </td>
                         <td>
-                          <span className={styles.number}>{quote.customerName}</span>
-                          <span className={styles.secondary}>{quote.customerTaxId}</span>
+                          <span className={styles.number}>{salesOrder.customerName}</span>
+                          <span className={styles.secondary}>{salesOrder.customerTaxId}</span>
                         </td>
                         <td>
                           <span className={styles.number}>
-                            {solutionTypeLabels[quote.solutionType]}
+                            {salesOrder.sourceQuoteNumber ?? "Carga manual"}
                           </span>
-                          <span className={styles.secondary}>{quote.notes}</span>
+                          <span className={styles.secondary}>
+                            {solutionTypeLabels[salesOrder.solutionType]}
+                          </span>
                         </td>
                         <td>
-                          <span className={styles.number}>{quote.sellerName}</span>
+                          <span className={styles.number}>{salesOrder.sellerName}</span>
+                          <span className={styles.secondary}>{salesOrder.notes}</span>
                         </td>
                         <td>
                           <span
-                            className={`${styles.status} ${statusClassNames[quote.status]}`}
+                            className={`${styles.status} ${orderStatusClassNames[salesOrder.status]}`}
                           >
-                            {statusLabels[quote.status]}
+                            {salesOrderStatusLabels[salesOrder.status]}
                           </span>
                         </td>
                         <td>
                           <span className={styles.money}>
-                            {formatMoney(quote.totalAmount, quote.currency)}
+                            {formatMoney(salesOrder.totalAmount, salesOrder.currency)}
                           </span>
-                          <span className={styles.secondary}>{quote.currency}</span>
+                          <span className={styles.secondary}>{salesOrder.currency}</span>
                         </td>
                         <td>
-                          <span className={styles.number}>{formatDate(quote.validUntil)}</span>
+                          <span className={styles.number}>
+                            {formatDate(salesOrder.requestedDeliveryDate)}
+                          </span>
                           <span className={styles.secondary}>
                             {daysUntil > 0
-                              ? `Vence en ${daysUntil} dias`
+                              ? `Compromiso en ${daysUntil} dias`
                               : daysUntil === 0
-                                ? "Vence hoy"
-                                : "Ya vencido"}
+                                ? "Compromiso hoy"
+                                : "Fecha ya vencida"}
                           </span>
                         </td>
                       </tr>
@@ -692,27 +802,4 @@ export function QuotesWorkspace({ initialQuotes }: QuotesWorkspaceProps) {
       </section>
     </main>
   );
-}
-
-export function CommercialWorkspaceRouter({
-  initialQuotes,
-}: QuotesWorkspaceProps) {
-  const searchParams = useSearchParams();
-  const currentModule = searchParams.get("module") ?? "quotes";
-
-  if (currentModule === "customers") {
-    return <CustomersWorkspace initialCustomers={getSeedCustomers()} />;
-  }
-
-  if (currentModule === "orders") {
-    return (
-      <SalesOrdersWorkspace
-        initialCustomers={getSeedCustomers()}
-        initialOrders={getSeedSalesOrders()}
-        initialQuotes={initialQuotes}
-      />
-    );
-  }
-
-  return <QuotesWorkspace initialQuotes={initialQuotes} />;
 }

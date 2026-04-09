@@ -15,6 +15,7 @@ La app ya esta preparada para usar Supabase en cliente.
 - proyecto actual: `vrgtgixpbjyzmuxcdmdi`
 - schema base: `supabase/0001_initial_schema.sql`
 - parche para acceso navegador sin login: `supabase/0002_enable_anon_browser_access.sql`
+- modulo ventas / ordenes: `supabase/0003_sales_orders_module.sql`
 - variables ejemplo: `.env.example`
 
 ## Por que empezamos por este modulo
@@ -48,8 +49,9 @@ La razon de este stack es simple: TypeScript en frontend y backend reduce fricci
 
 Rutas web:
 
-- `/comercial/presupuestos`
-- `/maestros/clientes`
+- `/comercial/presupuestos?module=quotes`
+- `/comercial/presupuestos?module=customers`
+- `/comercial/presupuestos?module=orders`
 
 Persistencia actual:
 
@@ -67,8 +69,8 @@ npm run build
 
 ## Que sigue despues de este modulo
 
-1. integrar clientes reales dentro de presupuestos
-2. maestros de productos
-3. conversion de presupuesto a orden de venta
-4. reservas de stock
-5. persistencia real en PostgreSQL
+1. maestros de productos
+2. reserva y disponibilidad de stock
+3. entregas y remitos
+4. facturacion
+5. cobranzas y finanzas
