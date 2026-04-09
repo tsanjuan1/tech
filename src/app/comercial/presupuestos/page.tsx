@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { QuotesWorkspace } from "@/modules/commercial/quotes/workspace";
 import { getSeedQuotes } from "@/modules/commercial/quotes/repository";
@@ -7,5 +8,9 @@ export const metadata: Metadata = {
 };
 
 export default function QuotesPage() {
-  return <QuotesWorkspace initialQuotes={getSeedQuotes()} />;
+  return (
+    <Suspense fallback={null}>
+      <QuotesWorkspace initialQuotes={getSeedQuotes()} />
+    </Suspense>
+  );
 }

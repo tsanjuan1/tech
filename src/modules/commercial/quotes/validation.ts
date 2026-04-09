@@ -23,6 +23,7 @@ export function validateCreateQuoteInput(
   rawInput: RawCreateQuoteInput,
 ): QuoteValidationResult {
   const input = rawInput ?? {};
+  const customerId = asTrimmedString(input.customerId);
   const customerName = asTrimmedString(input.customerName);
   const customerTaxId = asTrimmedString(input.customerTaxId).replace(/\D/g, "");
   const solutionType = asTrimmedString(input.solutionType);
@@ -33,6 +34,10 @@ export function validateCreateQuoteInput(
   const notes = asTrimmedString(input.notes);
 
   const fieldErrors: Partial<Record<keyof CreateQuoteInput, string>> = {};
+
+  if (!customerId) {
+    fieldErrors.customerId = "Selecciona un cliente del maestro para continuar.";
+  }
 
   if (!customerName || customerName.length < 3) {
     fieldErrors.customerName = "El cliente debe tener al menos 3 caracteres.";
@@ -98,6 +103,7 @@ export function validateCreateQuoteInput(
   return {
     success: true,
     data: {
+      customerId,
       customerName,
       customerTaxId,
       solutionType: parsedSolutionType,

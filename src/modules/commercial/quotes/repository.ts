@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   CreateQuoteInput,
   CurrencyCode,
@@ -5,6 +6,22 @@ import type {
   QuoteStatus,
   QuotesDashboard,
 } from "./types";
+
+type QuoteRow = {
+  id: string;
+  number: string;
+  customer_id: string;
+  customer_snapshot_name: string;
+  customer_snapshot_tax_id: string;
+  solution_type: Quote["solutionType"];
+  seller_name: string;
+  status: Quote["status"];
+  currency: Quote["currency"];
+  total_amount: number;
+  valid_until: string;
+  created_at: string;
+  notes: string;
+};
 
 function addDays(baseDate: Date, amount: number) {
   const nextDate = new Date(baseDate);
@@ -44,6 +61,7 @@ const seedQuotes: Quote[] = [
   {
     id: "quote-seed-1",
     number: "P-2026-00001",
+    customerId: "customer-seed-1",
     customerName: "Grupo Delta",
     customerTaxId: "30715432109",
     solutionType: "infrastructure",
@@ -58,6 +76,7 @@ const seedQuotes: Quote[] = [
   {
     id: "quote-seed-2",
     number: "P-2026-00002",
+    customerId: "customer-seed-2",
     customerName: "Boreal Pharma",
     customerTaxId: "30698211457",
     solutionType: "licensing",
@@ -72,6 +91,7 @@ const seedQuotes: Quote[] = [
   {
     id: "quote-seed-3",
     number: "P-2026-00003",
+    customerId: "customer-seed-5",
     customerName: "Alfa Servicios",
     customerTaxId: "30711888361",
     solutionType: "workstations",
@@ -86,6 +106,7 @@ const seedQuotes: Quote[] = [
   {
     id: "quote-seed-4",
     number: "P-2026-00004",
+    customerId: "customer-seed-4",
     customerName: "Nexo Retail",
     customerTaxId: "30555888991",
     solutionType: "technical-service",
@@ -101,6 +122,67 @@ const seedQuotes: Quote[] = [
 
 export function getSeedQuotes() {
   return seedQuotes.map((quote) => ({ ...quote }));
+}
+
+function mapQuoteRow(row: QuoteRow): Quote {
+  return {
+    id: row.id,
+    number: row.number,
+    customerId: row.customer_id,
+    customerName: row.customer_snapshot_name,
+    customerTaxId: row.customer_snapshot_tax_id,
+    solutionType: row.solution_type,
+    sellerName: row.seller_name,
+    status: row.status,
+    currency: row.currency,
+    totalAmount: Number(row.total_amount),
+    validUntil: row.valid_until,
+    createdAt: row.created_at,
+    notes: row.notes,
+  };
+}
+
+export async function listSupabaseQuotes(supabase: SupabaseClient) {
+  const { data, error } = await supabase
+    .from("quotes")
+    .select(
+      "id, number, customer_id, customer_snapshot_name, customer_snapshot_tax_id, solution_type, seller_name, status, currency, total_amount, valid_until, created_at, notes",
+    )
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  return (data satisfies QuoteRow[]).map(mapQuoteRow);
+}
+
+export async function createSupabaseQuote(
+  supabase: SupabaseClient,
+  input: CreateQuoteInput,
+) {
+  const { data, error } = await supabase
+    .from("quotes")
+    .insert({
+      customer_id: input.customerId,
+      solution_type: input.solutionType,
+      seller_name: input.sellerName,
+      status: "draft",
+      currency: input.currency,
+      total_amount: input.totalAmount,
+      valid_until: input.validUntil,
+      notes: input.notes,
+    })
+    .select(
+      "id, number, customer_id, customer_snapshot_name, customer_snapshot_tax_id, solution_type, seller_name, status, currency, total_amount, valid_until, created_at, notes",
+    )
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return mapQuoteRow(data satisfies QuoteRow);
 }
 
 export function getQuotesDashboard(quotes: Quote[]): QuotesDashboard {
@@ -144,6 +226,7 @@ export function createBrowserQuote(input: CreateQuoteInput, currentQuotes: Quote
   return {
     id: buildQuoteId(),
     number: `P-${year}-${sequence}`,
+    customerId: input.customerId,
     customerName: input.customerName,
     customerTaxId: input.customerTaxId,
     solutionType: input.solutionType,

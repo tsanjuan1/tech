@@ -5,6 +5,7 @@ import { useFormStatus } from "react-dom";
 
 type SubmitButtonProps = {
   children: ReactNode;
+  pending?: boolean;
 };
 
 const buttonStyle = {
@@ -25,8 +26,9 @@ const buttonStyle = {
   transition: "transform 160ms ease, opacity 160ms ease",
 } as const;
 
-export function SubmitButton({ children }: SubmitButtonProps) {
-  const { pending } = useFormStatus();
+export function SubmitButton({ children, pending: pendingProp }: SubmitButtonProps) {
+  const { pending: formPending } = useFormStatus();
+  const pending = pendingProp ?? formPending;
 
   return (
     <button

@@ -2,6 +2,21 @@
 
 Base inicial de un ERP integral para una Pyme argentina que vende tecnologia a otras empresas.
 
+## Documento maestro
+
+La documentacion detallada del proyecto esta en:
+
+- `docs/PROYECTO_DETALLADO.md`
+
+## Supabase
+
+La app ya esta preparada para usar Supabase en cliente.
+
+- proyecto actual: `vrgtgixpbjyzmuxcdmdi`
+- schema base: `supabase/0001_initial_schema.sql`
+- parche para acceso navegador sin login: `supabase/0002_enable_anon_browser_access.sql`
+- variables ejemplo: `.env.example`
+
 ## Por que empezamos por este modulo
 
 El primer modulo es `Comercial / Presupuestos` porque ordena el origen de la operacion:
@@ -14,10 +29,10 @@ El primer modulo es `Comercial / Presupuestos` porque ordena el origen de la ope
 ## Stack elegido
 
 - `Next.js 16 + React 19 + TypeScript`
-- `App Router` para UI y backend-for-frontend
+- `App Router` para la experiencia web
 - `Arquitectura modular por dominio`
-- `Server Actions` para mutaciones
-- `Route Handlers` para integraciones JSON
+- `CSS Modules`
+- `Export estatico para Netlify`
 
 ## Software recomendado para trabajar bien con Claude
 
@@ -31,14 +46,15 @@ La razon de este stack es simple: TypeScript en frontend y backend reduce fricci
 
 ## Modulo disponible hoy
 
-Ruta web:
+Rutas web:
 
 - `/comercial/presupuestos`
+- `/maestros/clientes`
 
-API:
+Persistencia actual:
 
-- `GET /api/commercial/quotes`
-- `POST /api/commercial/quotes`
+- `Supabase` desde navegador
+- fallback visual a datos semilla si la base todavia no responde
 
 ## Comandos
 
@@ -51,8 +67,8 @@ npm run build
 
 ## Que sigue despues de este modulo
 
-1. maestros de clientes y productos
-2. conversion de presupuesto a orden de venta
-3. reservas de stock
-4. aprobaciones comerciales y crediticias
+1. integrar clientes reales dentro de presupuestos
+2. maestros de productos
+3. conversion de presupuesto a orden de venta
+4. reservas de stock
 5. persistencia real en PostgreSQL

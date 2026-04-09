@@ -1,0 +1,6 @@
+/clientes /comercial/presupuestos/?module=customers 302
+/clientes/ /comercial/presupuestos/?module=customers 302
+/clientes/* /comercial/presupuestos/?module=customers 302
+/maestros/clientes /comercial/presupuestos/?module=customers 302
+/maestros/clientes/ /comercial/presupuestos/?module=customers 302
+/maestros/clientes/* /comercial/presupuestos/?module=customers 302

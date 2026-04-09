@@ -1,10 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { ModuleNav } from "@/components/module-nav";
+import styles from "@/components/module-shell.module.css";
 import { SubmitButton } from "@/components/submit-button";
 import {
-  createBrowserQuote,
+  getSupabaseBrowserClient,
+  isSupabaseConfigured,
+} from "@/lib/supabase/client";
+import { getSupabaseActionMessage } from "@/lib/supabase/error-message";
+import {
+  createSupabaseQuote,
   getQuotesDashboard,
+  listSupabaseQuotes,
 } from "@/modules/commercial/quotes/repository";
 import type {
   CurrencyCode,
@@ -17,13 +26,18 @@ import {
   statusLabels,
 } from "@/modules/commercial/quotes/types";
 import { validateCreateQuoteInput } from "@/modules/commercial/quotes/validation";
-import styles from "@/app/comercial/presupuestos/page.module.css";
+import {
+  getSeedCustomers,
+  listSupabaseCustomers,
+} from "@/modules/masters/customers/repository";
+import { CustomersWorkspace } from "@/modules/masters/customers/workspace";
 
 type QuotesWorkspaceProps = {
   initialQuotes: Quote[];
 };
 
 type FormState = {
+  customerId: string;
   customerName: string;
   customerTaxId: string;
   solutionType: string;
@@ -41,9 +55,8 @@ type FeedbackState =
     }
   | null;
 
-const storageKey = "b2b-tech-erp:quotes";
-
 const defaultFormState: FormState = {
+  customerId: "",
   customerName: "",
   customerTaxId: "",
   solutionType: "",
@@ -102,6 +115,7 @@ function getDaysUntil(value: string) {
 
 function normalizeFormState(formState: FormState) {
   return {
+    customerId: formState.customerId,
     customerName: formState.customerName,
     customerTaxId: formState.customerTaxId,
     solutionType: formState.solutionType,
@@ -114,44 +128,76 @@ function normalizeFormState(formState: FormState) {
 }
 
 export function QuotesWorkspace({ initialQuotes }: QuotesWorkspaceProps) {
+  const searchParams = useSearchParams();
   const [quotes, setQuotes] = useState(initialQuotes);
+  const [customers, setCustomers] = useState(getSeedCustomers());
   const [formState, setFormState] = useState<FormState>(defaultFormState);
   const [feedback, setFeedback] = useState<FeedbackState>(null);
+  const [connectionNotice, setConnectionNotice] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<
     Partial<Record<QuoteFieldName, string>>
   >({});
-  const [hydrated, setHydrated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const isMountedRef = useRef(true);
 
-  useEffect(() => {
-    try {
-      const storedQuotes = window.localStorage.getItem(storageKey);
-
-      if (storedQuotes) {
-        const parsedQuotes = JSON.parse(storedQuotes) as Quote[];
-        if (Array.isArray(parsedQuotes) && parsedQuotes.length > 0) {
-          setQuotes(parsedQuotes);
-        }
+  async function loadWorkspace() {
+    if (!isSupabaseConfigured()) {
+      if (isMountedRef.current) {
+        setIsLoading(false);
+        setIsRefreshing(false);
+        setConnectionNotice(
+          "Supabase no esta configurado todavia. La app queda mostrando los datos base para que puedas seguir navegando.",
+        );
       }
-    } catch {
-      setFeedback({
-        type: "error",
-        message:
-          "No se pudo leer el historial local del navegador. Se cargaron los datos base.",
-      });
-    } finally {
-      setHydrated(true);
-    }
-  }, []);
 
-  useEffect(() => {
-    if (!hydrated) {
       return;
     }
 
-    window.localStorage.setItem(storageKey, JSON.stringify(quotes));
-  }, [hydrated, quotes]);
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const [nextQuotes, nextCustomers] = await Promise.all([
+        listSupabaseQuotes(supabase),
+        listSupabaseCustomers(supabase),
+      ]);
+
+      if (isMountedRef.current) {
+        setQuotes(nextQuotes);
+        setCustomers(nextCustomers);
+        setConnectionNotice(null);
+      }
+    } catch (error) {
+      if (isMountedRef.current) {
+        setConnectionNotice(getSupabaseActionMessage(error, "quotes-read"));
+      }
+    } finally {
+      if (isMountedRef.current) {
+        setIsLoading(false);
+        setIsRefreshing(false);
+      }
+    }
+  }
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    void loadWorkspace();
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const dashboard = useMemo(() => getQuotesDashboard(quotes), [quotes]);
+  const selectedCustomer = useMemo(
+    () => customers.find((customer) => customer.id === formState.customerId) ?? null,
+    [customers, formState.customerId],
+  );
+  const currentModule = searchParams.get("module") ?? "quotes";
+
+  if (currentModule === "customers") {
+    return <CustomersWorkspace initialCustomers={getSeedCustomers()} />;
+  }
 
   function handleFieldChange(
     field: keyof FormState,
@@ -171,7 +217,26 @@ export function QuotesWorkspace({ initialQuotes }: QuotesWorkspaceProps) {
     }
   }
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  function handleCustomerChange(customerId: string) {
+    const customer = customers.find((entry) => entry.id === customerId);
+
+    setFormState((current) => ({
+      ...current,
+      customerId,
+      customerName: customer?.businessName ?? "",
+      customerTaxId: customer?.taxId ?? "",
+      sellerName: customer?.accountManager ?? current.sellerName,
+    }));
+
+    setFieldErrors((current) => ({
+      ...current,
+      customerId: undefined,
+      customerName: undefined,
+      customerTaxId: undefined,
+    }));
+  }
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const validation = validateCreateQuoteInput(normalizeFormState(formState));
@@ -185,26 +250,49 @@ export function QuotesWorkspace({ initialQuotes }: QuotesWorkspaceProps) {
       return;
     }
 
-    const nextQuote = createBrowserQuote(validation.data, quotes);
-    setQuotes((current) => [nextQuote, ...current]);
-    setFormState(defaultFormState);
-    setFieldErrors({});
-    setFeedback({
-      type: "success",
-      message: `Presupuesto ${nextQuote.number} creado correctamente para ${nextQuote.customerName}.`,
-    });
+    setIsSaving(true);
+
+    try {
+      const nextQuote = await createSupabaseQuote(
+        getSupabaseBrowserClient(),
+        validation.data,
+      );
+
+      setQuotes((current) => [nextQuote, ...current]);
+      setFormState(defaultFormState);
+      setFieldErrors({});
+      setFeedback({
+        type: "success",
+        message: `Presupuesto ${nextQuote.number} creado correctamente para ${nextQuote.customerName}.`,
+      });
+    } catch (error) {
+      setFeedback({
+        type: "error",
+        message: getSupabaseActionMessage(error, "quotes-write"),
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handleRetryConnection() {
+    setIsRefreshing(true);
+    setFeedback(null);
+    await loadWorkspace();
   }
 
   return (
     <main className={styles.shell}>
+      <ModuleNav />
+
       <section className={styles.hero}>
         <article className={styles.heroPanel}>
           <span className={styles.eyebrow}>Modulo 01 / Comercial</span>
           <h1 className={styles.heroTitle}>Presupuestos que ordenan toda la operacion</h1>
           <p className={styles.heroText}>
             Esta primera version ya queda deployable en Netlify sin runtime
-            server. La carga de presupuestos funciona en el navegador y deja la
-            experiencia lista para pasar luego a backend real con base de datos.
+            server. La carga de presupuestos funciona sobre Supabase y convive
+            con el maestro de clientes para empezar a darle forma real al ERP.
           </p>
 
           <div className={styles.heroCallouts}>
@@ -214,11 +302,11 @@ export function QuotesWorkspace({ initialQuotes }: QuotesWorkspaceProps) {
             </div>
             <div className={styles.callout}>
               <span className={styles.calloutLabel}>Persistencia actual</span>
-              <strong className={styles.calloutValue}>Local del navegador</strong>
+              <strong className={styles.calloutValue}>Supabase en tiempo real</strong>
             </div>
             <div className={styles.callout}>
-              <span className={styles.calloutLabel}>Siguiente hito</span>
-              <strong className={styles.calloutValue}>Backend y orden de venta</strong>
+              <span className={styles.calloutLabel}>Conexion activa</span>
+              <strong className={styles.calloutValue}>Cliente maestro vinculado</strong>
             </div>
           </div>
         </article>
@@ -227,9 +315,9 @@ export function QuotesWorkspace({ initialQuotes }: QuotesWorkspaceProps) {
           <div>
             <h2 className={styles.sidebarTitle}>Web lista para mostrar</h2>
             <p className={styles.sidebarText}>
-              Esta version queda publica y sin 404. Mantiene la interfaz, el
-              flujo de alta y las metricas del modulo mientras preparamos la
-              etapa con base de datos y servicios reales.
+              Esta version queda publica, conectada a Supabase y con el flujo
+              comercial listo para seguir creciendo sin depender de datos
+              guardados solo en el navegador.
             </p>
           </div>
 
@@ -240,11 +328,11 @@ export function QuotesWorkspace({ initialQuotes }: QuotesWorkspaceProps) {
             </div>
             <div className={styles.sidebarItem}>
               <strong>Interaccion</strong>
-              <span>Formulario funcional con validacion y guardado local</span>
+              <span>Formulario conectado al maestro y persistido en Supabase</span>
             </div>
             <div className={styles.sidebarItem}>
               <strong>Proxima etapa</strong>
-              <span>PostgreSQL, auth por roles, stock y facturacion ARCA</span>
+              <span>Productos, items de presupuesto y conversion a venta</span>
             </div>
           </div>
         </aside>
@@ -259,6 +347,21 @@ export function QuotesWorkspace({ initialQuotes }: QuotesWorkspaceProps) {
           }`}
         >
           {feedback.message}
+        </section>
+      ) : null}
+
+      {connectionNotice ? (
+        <section className={styles.feedback}>
+          <div>{connectionNotice}</div>
+          <div className={styles.feedbackActions}>
+            <button
+              className={styles.secondaryButton}
+              onClick={handleRetryConnection}
+              type="button"
+            >
+              {isRefreshing ? "Reintentando..." : "Reintentar conexion"}
+            </button>
+          </div>
         </section>
       ) : null}
 
@@ -309,48 +412,69 @@ export function QuotesWorkspace({ initialQuotes }: QuotesWorkspaceProps) {
             <div>
               <h2 className={styles.panelTitle}>Nuevo presupuesto</h2>
               <p className={styles.panelText}>
-                La carga funciona desde el navegador y se guarda en este mismo
-                equipo. Es ideal para demo, prueba operativa y validacion de
-                flujo antes de conectar backend definitivo.
+                El presupuesto ahora nace desde un cliente real del maestro.
+                Eso evita errores de carga, deja la relacion lista para ventas y
+                ordena mejor la base comercial incluso en esta etapa estatica.
               </p>
             </div>
-            <span className={styles.stack}>Cliente + Storage</span>
+            <span className={styles.stack}>Cliente + Quote link</span>
           </div>
 
           <form className={styles.form} onSubmit={handleSubmit}>
             <div className={styles.formGrid}>
-              <label className={styles.field}>
-                <span className={styles.label}>Cliente</span>
-                <input
-                  className={styles.input}
-                  name="customerName"
-                  onChange={(event) =>
-                    handleFieldChange("customerName", event.target.value)}
-                  placeholder="Empresa cliente"
+              <label className={styles.fieldWide}>
+                <span className={styles.label}>Cliente maestro</span>
+                <select
+                  className={styles.select}
+                  name="customerId"
+                  onChange={(event) => handleCustomerChange(event.target.value)}
                   required
-                  type="text"
-                  value={formState.customerName}
-                />
-                {fieldErrors.customerName ? (
-                  <span className={styles.secondary}>{fieldErrors.customerName}</span>
-                ) : null}
+                  value={formState.customerId}
+                >
+                  <option disabled value="">
+                    Seleccionar cliente
+                  </option>
+                  {customers.map((customer) => (
+                    <option key={customer.id} value={customer.id}>
+                      {customer.code} - {customer.businessName}
+                    </option>
+                  ))}
+                </select>
+                {fieldErrors.customerId || fieldErrors.customerName || fieldErrors.customerTaxId ? (
+                  <span className={styles.secondary}>
+                    {fieldErrors.customerId ??
+                      fieldErrors.customerName ??
+                      fieldErrors.customerTaxId}
+                  </span>
+                ) : (
+                  <span className={styles.secondary}>
+                    Si el cliente no existe aun, cargalo desde el modulo Maestros / Clientes.
+                  </span>
+                )}
               </label>
 
               <label className={styles.field}>
-                <span className={styles.label}>CUIT</span>
+                <span className={styles.label}>Razon social vinculada</span>
+                <input
+                  className={styles.input}
+                  name="customerName"
+                  placeholder="Selecciona un cliente"
+                  readOnly
+                  type="text"
+                  value={formState.customerName}
+                />
+              </label>
+
+              <label className={styles.field}>
+                <span className={styles.label}>CUIT vinculado</span>
                 <input
                   className={styles.input}
                   name="customerTaxId"
-                  onChange={(event) =>
-                    handleFieldChange("customerTaxId", event.target.value)}
-                  placeholder="30XXXXXXXXX"
-                  required
+                  placeholder="Selecciona un cliente"
+                  readOnly
                   type="text"
                   value={formState.customerTaxId}
                 />
-                {fieldErrors.customerTaxId ? (
-                  <span className={styles.secondary}>{fieldErrors.customerTaxId}</span>
-                ) : null}
               </label>
 
               <label className={styles.field}>
@@ -391,6 +515,10 @@ export function QuotesWorkspace({ initialQuotes }: QuotesWorkspaceProps) {
                 />
                 {fieldErrors.sellerName ? (
                   <span className={styles.secondary}>{fieldErrors.sellerName}</span>
+                ) : selectedCustomer ? (
+                  <span className={styles.secondary}>
+                    Sugerido desde la cuenta: {selectedCustomer.accountManager}
+                  </span>
                 ) : null}
               </label>
 
@@ -463,16 +591,21 @@ export function QuotesWorkspace({ initialQuotes }: QuotesWorkspaceProps) {
             </div>
 
             <div className={styles.hintRow}>
-              <span>Los datos se guardan localmente en este navegador.</span>
-              <span>Perfecto para demo y validacion operativa inicial.</span>
+              <span>El presupuesto guarda un snapshot del cliente y su referencia maestra.</span>
+              <span>
+                {isLoading || isRefreshing
+                  ? "Sincronizando datos..."
+                  : "Guardado real en Supabase."}
+              </span>
             </div>
 
-            <SubmitButton>Guardar presupuesto</SubmitButton>
+            <SubmitButton pending={isSaving}>Guardar presupuesto</SubmitButton>
           </form>
 
           <p className={styles.note}>
-            Esta version reemplaza temporalmente la API server para asegurar un
-            deploy estable en Netlify sin errores ni rutas rotas.
+            {connectionNotice
+              ? "El modulo ya esta preparado para Supabase. Cuando corras el SQL en tu proyecto, recarga la pagina y pasara a leer la base real."
+              : "Este modulo ahora usa Supabase. Si acabas de correr el SQL, recarga la pagina para ver los datos iniciales ya persistidos."}
           </p>
         </article>
 

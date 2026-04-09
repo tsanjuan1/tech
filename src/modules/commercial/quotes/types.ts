@@ -41,6 +41,7 @@ export const solutionTypeLabels: Record<SolutionType, string> = {
 export type Quote = {
   id: string;
   number: string;
+  customerId?: string;
   customerName: string;
   customerTaxId: string;
   solutionType: SolutionType;
@@ -54,6 +55,7 @@ export type Quote = {
 };
 
 export type CreateQuoteInput = {
+  customerId: string;
   customerName: string;
   customerTaxId: string;
   solutionType: SolutionType;
@@ -65,6 +67,7 @@ export type CreateQuoteInput = {
 };
 
 export type QuoteFieldName =
+  | "customerId"
   | "customerName"
   | "customerTaxId"
   | "solutionType"
