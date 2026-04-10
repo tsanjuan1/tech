@@ -23,6 +23,12 @@ const modules = [
     label: "Ventas / Ordenes",
     module: "orders",
   },
+  {
+    href: "/comercial/presupuestos?module=products",
+    index: "04",
+    label: "Maestros / Productos",
+    module: "products",
+  },
 ] as const;
 
 export function ModuleNav() {

@@ -10,6 +10,8 @@ type SupabaseOperation =
   | "customers-write"
   | "quotes-read"
   | "quotes-write"
+  | "products-read"
+  | "products-write"
   | "sales-orders-read"
   | "sales-orders-write";
 
@@ -45,6 +47,13 @@ export function getSupabaseActionMessage(
 
   if (isPermissionError) {
     if (
+      operation === "products-read" ||
+      operation === "products-write"
+    ) {
+      return "Supabase esta respondiendo, pero el modulo de productos todavia no tiene permisos o estructura lista para la web publica. Ejecuta 0004_product_catalog_module.sql en Supabase y luego toca Reintentar conexion.";
+    }
+
+    if (
       operation === "sales-orders-read" ||
       operation === "sales-orders-write"
     ) {
@@ -59,6 +68,13 @@ export function getSupabaseActionMessage(
   }
 
   if (isMissingRelation) {
+    if (
+      operation === "products-read" ||
+      operation === "products-write"
+    ) {
+      return "El modulo de productos todavia no existe en tu base. Corre 0004_product_catalog_module.sql en Supabase y luego toca Reintentar conexion.";
+    }
+
     if (
       operation === "sales-orders-read" ||
       operation === "sales-orders-write"
@@ -83,6 +99,14 @@ export function getSupabaseActionMessage(
 
   if (operation === "quotes-read") {
     return "No se pudo leer Supabase para presupuestos. Revisa la conexion del proyecto y vuelve a intentar.";
+  }
+
+  if (operation === "products-read") {
+    return "No se pudo leer Supabase para productos. Revisa la conexion del proyecto y vuelve a intentar.";
+  }
+
+  if (operation === "products-write") {
+    return "No se pudo guardar el producto en Supabase. Revisa permisos, esquema y conexion del proyecto.";
   }
 
   if (operation === "sales-orders-read") {

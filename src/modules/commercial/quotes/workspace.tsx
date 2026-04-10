@@ -31,6 +31,8 @@ import {
   listSupabaseCustomers,
 } from "@/modules/masters/customers/repository";
 import { CustomersWorkspace } from "@/modules/masters/customers/workspace";
+import { getSeedProducts } from "@/modules/masters/products/repository";
+import { ProductsWorkspace } from "@/modules/masters/products/workspace";
 import { getSeedSalesOrders } from "@/modules/sales/orders/repository";
 import { SalesOrdersWorkspace } from "@/modules/sales/orders/workspace";
 
@@ -712,6 +714,10 @@ export function CommercialWorkspaceRouter({
         initialQuotes={initialQuotes}
       />
     );
+  }
+
+  if (currentModule === "products") {
+    return <ProductsWorkspace initialProducts={getSeedProducts()} />;
   }
 
   return <QuotesWorkspace initialQuotes={initialQuotes} />;
