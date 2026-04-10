@@ -12,6 +12,8 @@ type SupabaseOperation =
   | "quotes-write"
   | "products-read"
   | "products-write"
+  | "inventory-read"
+  | "inventory-write"
   | "sales-orders-read"
   | "sales-orders-write";
 
@@ -47,6 +49,13 @@ export function getSupabaseActionMessage(
 
   if (isPermissionError) {
     if (
+      operation === "inventory-read" ||
+      operation === "inventory-write"
+    ) {
+      return "Supabase esta respondiendo, pero el modulo de stock todavia no tiene permisos o estructura lista para la web publica. Ejecuta 0004_product_catalog_module.sql y 0005_inventory_stock_module.sql en Supabase y luego toca Reintentar conexion.";
+    }
+
+    if (
       operation === "products-read" ||
       operation === "products-write"
     ) {
@@ -68,6 +77,13 @@ export function getSupabaseActionMessage(
   }
 
   if (isMissingRelation) {
+    if (
+      operation === "inventory-read" ||
+      operation === "inventory-write"
+    ) {
+      return "El modulo de stock todavia no existe en tu base. Corre 0004_product_catalog_module.sql y 0005_inventory_stock_module.sql en Supabase y luego toca Reintentar conexion.";
+    }
+
     if (
       operation === "products-read" ||
       operation === "products-write"
@@ -107,6 +123,14 @@ export function getSupabaseActionMessage(
 
   if (operation === "products-write") {
     return "No se pudo guardar el producto en Supabase. Revisa permisos, esquema y conexion del proyecto.";
+  }
+
+  if (operation === "inventory-read") {
+    return "No se pudo leer Supabase para stock. Revisa la conexion del proyecto y vuelve a intentar.";
+  }
+
+  if (operation === "inventory-write") {
+    return "No se pudo guardar el movimiento o la reserva en Supabase. Revisa permisos, esquema y conexion del proyecto.";
   }
 
   if (operation === "sales-orders-read") {

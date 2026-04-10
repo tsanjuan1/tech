@@ -29,6 +29,12 @@ const modules = [
     label: "Maestros / Productos",
     module: "products",
   },
+  {
+    href: "/comercial/presupuestos?module=inventory",
+    index: "05",
+    label: "Stock / Disponibilidad",
+    module: "inventory",
+  },
 ] as const;
 
 export function ModuleNav() {

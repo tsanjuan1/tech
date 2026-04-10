@@ -30,6 +30,11 @@ import {
   getSeedCustomers,
   listSupabaseCustomers,
 } from "@/modules/masters/customers/repository";
+import {
+  getSeedInventoryAllocations,
+  getSeedInventoryMovements,
+} from "@/modules/inventory/stock/repository";
+import { StockWorkspace } from "@/modules/inventory/stock/workspace";
 import { CustomersWorkspace } from "@/modules/masters/customers/workspace";
 import { getSeedProducts } from "@/modules/masters/products/repository";
 import { ProductsWorkspace } from "@/modules/masters/products/workspace";
@@ -718,6 +723,17 @@ export function CommercialWorkspaceRouter({
 
   if (currentModule === "products") {
     return <ProductsWorkspace initialProducts={getSeedProducts()} />;
+  }
+
+  if (currentModule === "inventory") {
+    return (
+      <StockWorkspace
+        initialProducts={getSeedProducts()}
+        initialSalesOrders={getSeedSalesOrders()}
+        initialMovements={getSeedInventoryMovements()}
+        initialAllocations={getSeedInventoryAllocations()}
+      />
+    );
   }
 
   return <QuotesWorkspace initialQuotes={initialQuotes} />;
