@@ -14,6 +14,8 @@ type SupabaseOperation =
   | "products-write"
   | "inventory-read"
   | "inventory-write"
+  | "purchases-read"
+  | "purchases-write"
   | "sales-orders-read"
   | "sales-orders-write";
 
@@ -49,6 +51,13 @@ export function getSupabaseActionMessage(
 
   if (isPermissionError) {
     if (
+      operation === "purchases-read" ||
+      operation === "purchases-write"
+    ) {
+      return "Supabase esta respondiendo, pero el modulo de compras todavia no tiene permisos o estructura lista para la web publica. Ejecuta 0004_product_catalog_module.sql, 0005_inventory_stock_module.sql y 0006_purchase_orders_module.sql en Supabase y luego toca Reintentar conexion.";
+    }
+
+    if (
       operation === "inventory-read" ||
       operation === "inventory-write"
     ) {
@@ -77,6 +86,13 @@ export function getSupabaseActionMessage(
   }
 
   if (isMissingRelation) {
+    if (
+      operation === "purchases-read" ||
+      operation === "purchases-write"
+    ) {
+      return "El modulo de compras todavia no existe en tu base. Corre 0004_product_catalog_module.sql, 0005_inventory_stock_module.sql y 0006_purchase_orders_module.sql en Supabase y luego toca Reintentar conexion.";
+    }
+
     if (
       operation === "inventory-read" ||
       operation === "inventory-write"
@@ -131,6 +147,14 @@ export function getSupabaseActionMessage(
 
   if (operation === "inventory-write") {
     return "No se pudo guardar el movimiento o la reserva en Supabase. Revisa permisos, esquema y conexion del proyecto.";
+  }
+
+  if (operation === "purchases-read") {
+    return "No se pudo leer Supabase para compras. Revisa la conexion del proyecto y vuelve a intentar.";
+  }
+
+  if (operation === "purchases-write") {
+    return "No se pudo guardar la orden de compra en Supabase. Revisa permisos, esquema y conexion del proyecto.";
   }
 
   if (operation === "sales-orders-read") {

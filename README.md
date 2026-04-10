@@ -18,6 +18,7 @@ La app ya esta preparada para usar Supabase en cliente.
 - modulo ventas / ordenes: `supabase/0003_sales_orders_module.sql`
 - modulo maestros / productos: `supabase/0004_product_catalog_module.sql`
 - modulo stock / disponibilidad: `supabase/0005_inventory_stock_module.sql`
+- modulo compras / reposicion: `supabase/0006_purchase_orders_module.sql`
 - variables ejemplo: `.env.example`
 
 ## Por que empezamos por este modulo
@@ -56,6 +57,7 @@ Rutas web:
 - `/comercial/presupuestos?module=orders`
 - `/comercial/presupuestos?module=products`
 - `/comercial/presupuestos?module=inventory`
+- `/comercial/presupuestos?module=purchases`
 
 Persistencia actual:
 
@@ -73,8 +75,8 @@ npm run build
 
 ## Que sigue despues de este modulo
 
-1. compras y reposicion
-2. entregas y remitos
-3. facturacion
-4. cobranzas y finanzas
-5. impuestos y contabilidad
+1. entregas y remitos
+2. facturacion
+3. cobranzas y finanzas
+4. impuestos y contabilidad
+5. servicio tecnico y RMA

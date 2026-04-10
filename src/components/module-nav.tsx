@@ -35,6 +35,12 @@ const modules = [
     label: "Stock / Disponibilidad",
     module: "inventory",
   },
+  {
+    href: "/comercial/presupuestos?module=purchases",
+    index: "06",
+    label: "Compras / Reposicion",
+    module: "purchases",
+  },
 ] as const;
 
 export function ModuleNav() {

@@ -38,6 +38,8 @@ import { StockWorkspace } from "@/modules/inventory/stock/workspace";
 import { CustomersWorkspace } from "@/modules/masters/customers/workspace";
 import { getSeedProducts } from "@/modules/masters/products/repository";
 import { ProductsWorkspace } from "@/modules/masters/products/workspace";
+import { getSeedPurchaseOrders } from "@/modules/purchasing/orders/repository";
+import { PurchasingWorkspace } from "@/modules/purchasing/orders/workspace";
 import { getSeedSalesOrders } from "@/modules/sales/orders/repository";
 import { SalesOrdersWorkspace } from "@/modules/sales/orders/workspace";
 
@@ -728,6 +730,18 @@ export function CommercialWorkspaceRouter({
   if (currentModule === "inventory") {
     return (
       <StockWorkspace
+        initialProducts={getSeedProducts()}
+        initialSalesOrders={getSeedSalesOrders()}
+        initialMovements={getSeedInventoryMovements()}
+        initialAllocations={getSeedInventoryAllocations()}
+      />
+    );
+  }
+
+  if (currentModule === "purchases") {
+    return (
+      <PurchasingWorkspace
+        initialPurchaseOrders={getSeedPurchaseOrders()}
         initialProducts={getSeedProducts()}
         initialSalesOrders={getSeedSalesOrders()}
         initialMovements={getSeedInventoryMovements()}
