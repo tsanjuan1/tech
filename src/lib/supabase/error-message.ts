@@ -37,7 +37,9 @@ export function getSupabaseActionMessage(
   const isPermissionError =
     supabaseError.code === "42501" || message.includes("permission denied");
   const isMissingRelation =
+    supabaseError.code === "PGRST205" ||
     supabaseError.code === "42p01" ||
+    message.includes("schema cache") ||
     message.includes("relation") ||
     message.includes("does not exist");
 
